@@ -34,16 +34,6 @@ wheels/
 # Environment variables
 .env
 
-# Data files
-data/*.csv
-!data/.gitkeep
-
-# Model files
-models/*.joblib
-models/bert_model/
-models/bert_tokenizer/
-!models/.gitkeep
-
 # Large files
 *.dylib
 *.pt
