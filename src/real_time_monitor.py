@@ -3,6 +3,10 @@ import pandas as pd
 from datetime import datetime
 import os
 import sys
+import joblib
+import torch
+from transformers import BertTokenizer, BertForSequenceClassification
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.twitter_api import TwitterAPI
@@ -26,7 +30,9 @@ class SentimentMonitor:
     
     def _load_baseline_model(self):
         """Load the baseline model and vectorizer"""
-        model_dir = '../models'
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        model_dir = os.path.join(base_dir, 'models')
+        
         vectorizer = joblib.load(os.path.join(model_dir, 'tfidf_vectorizer.joblib'))
         model = joblib.load(os.path.join(model_dir, 'baseline_model.joblib'))
         
@@ -38,14 +44,12 @@ class SentimentMonitor:
     
     def _load_bert_model(self):
         """Load the BERT model and tokenizer"""
-        model_dir = '../models'
         bert_model = BERTModel()
         bert_model.model = BertForSequenceClassification.from_pretrained(
-            os.path.join(model_dir, 'bert_model')
+            'bert-base-uncased',
+            num_labels=3
         )
-        bert_model.tokenizer = BertTokenizer.from_pretrained(
-            os.path.join(model_dir, 'bert_tokenizer')
-        )
+        bert_model.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         
         return bert_model
     
@@ -132,8 +136,9 @@ class SentimentMonitor:
             return
         
         df = pd.DataFrame(self.results)
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'../data/monitoring_results_{timestamp}.csv'
+        filename = os.path.join(base_dir, 'data', f'monitoring_results_{timestamp}.csv')
         
         df.to_csv(filename, index=False)
         print(f"Results saved to {filename}")
@@ -143,6 +148,6 @@ def main():
     query = "Tesla"  # Replace with your target brand/company
     monitor = SentimentMonitor(query, interval_minutes=5)
     monitor.monitor()
-#python src/real_time_monitor.py
+
 if __name__ == "__main__":
     main() 

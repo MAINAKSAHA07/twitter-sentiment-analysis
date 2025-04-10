@@ -64,13 +64,16 @@ class BaselineModel:
             'report': report
         }
     
-    def save_model(self, model_dir='../models'):
+    def save_model(self, model_dir=None):
         """
         Save the trained model and vectorizer
         
         Args:
             model_dir (str): Directory to save the models
         """
+        if model_dir is None:
+            model_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'models')
+        
         os.makedirs(model_dir, exist_ok=True)
         
         joblib.dump(self.vectorizer, os.path.join(model_dir, 'tfidf_vectorizer.joblib'))
@@ -80,7 +83,8 @@ class BaselineModel:
 
 def main():
     # Load processed data
-    processed_file = '../data/processed_tweets.csv'
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    processed_file = os.path.join(base_dir, 'data', 'processed_tweets.csv')
     df = pd.read_csv(processed_file)
     
     # Initialize model

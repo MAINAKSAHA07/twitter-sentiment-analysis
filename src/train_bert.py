@@ -1,7 +1,7 @@
 import torch
 from torch.utils.data import Dataset, DataLoader
 from transformers import BertTokenizer, BertForSequenceClassification
-from transformers import AdamW, get_linear_schedule_with_warmup
+from transformers import get_scheduler
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
@@ -40,12 +40,11 @@ class TweetDataset(Dataset):
 class BERTModel:
     def __init__(self, num_labels=3):
         self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         self.model = BertForSequenceClassification.from_pretrained(
             'bert-base-uncased',
             num_labels=num_labels
         ).to(self.device)
-        
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
         self.label_map = {'negative': 0, 'neutral': 1, 'positive': 2}
         self.reverse_label_map = {v: k for k, v in self.label_map.items()}
     
@@ -59,7 +58,7 @@ class BERTModel:
         Returns:
             tuple: (train_dataset, val_dataset, test_dataset)
         """
-        # Convert labels to numerical values
+        # Convert labels to numeric values
         df['label'] = df['sentiment'].map(self.label_map)
         
         # Split data
@@ -100,12 +99,14 @@ class BERTModel:
         train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
         val_loader = DataLoader(val_dataset, batch_size=batch_size)
         
-        optimizer = AdamW(self.model.parameters(), lr=2e-5)
-        total_steps = len(train_loader) * epochs
-        scheduler = get_linear_schedule_with_warmup(
-            optimizer,
+        optimizer = torch.optim.AdamW(self.model.parameters(), lr=2e-5)
+        
+        num_training_steps = len(train_loader) * epochs
+        lr_scheduler = get_scheduler(
+            name="linear",
+            optimizer=optimizer,
             num_warmup_steps=0,
-            num_training_steps=total_steps
+            num_training_steps=num_training_steps
         )
         
         for epoch in range(epochs):
@@ -113,10 +114,10 @@ class BERTModel:
             
             # Training
             self.model.train()
-            total_loss = 0
-            
-            progress_bar = tqdm(train_loader, desc='Training')
-            for batch in progress_bar:
+            train_loss = 0
+            for batch in tqdm(train_loader, desc="Training"):
+                optimizer.zero_grad()
+                
                 input_ids = batch['input_ids'].to(self.device)
                 attention_mask = batch['attention_mask'].to(self.device)
                 labels = batch['labels'].to(self.device)
@@ -128,17 +129,14 @@ class BERTModel:
                 )
                 
                 loss = outputs.loss
-                total_loss += loss.item()
+                train_loss += loss.item()
                 
                 loss.backward()
                 optimizer.step()
-                scheduler.step()
-                optimizer.zero_grad()
-                
-                progress_bar.set_postfix({'loss': loss.item()})
+                lr_scheduler.step()
             
-            avg_train_loss = total_loss / len(train_loader)
-            print(f"Average training loss: {avg_train_loss:.4f}")
+            avg_train_loss = train_loss / len(train_loader)
+            print(f"Training loss: {avg_train_loss:.4f}")
             
             # Validation
             self.model.eval()
@@ -147,7 +145,7 @@ class BERTModel:
             total = 0
             
             with torch.no_grad():
-                for batch in val_loader:
+                for batch in tqdm(val_loader, desc="Validation"):
                     input_ids = batch['input_ids'].to(self.device)
                     attention_mask = batch['attention_mask'].to(self.device)
                     labels = batch['labels'].to(self.device)
@@ -159,6 +157,7 @@ class BERTModel:
                     )
                     
                     val_loss += outputs.loss.item()
+                    
                     _, predicted = torch.max(outputs.logits, 1)
                     total += labels.size(0)
                     correct += (predicted == labels).sum().item()
@@ -184,7 +183,8 @@ class BERTModel:
 
 def main():
     # Load processed data
-    processed_file = '../data/processed_tweets.csv'
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    processed_file = os.path.join(base_dir, 'data', 'processed_tweets.csv')
     df = pd.read_csv(processed_file)
     
     # Initialize model

@@ -34,38 +34,45 @@ class TwitterAPI:
         query = f"{query} lang:en -is:retweet"
         
         try:
-            for tweet in tweepy.Paginator(
-                self.client.search_recent_tweets,
+            # For small number of tweets, we can fetch them in a single request
+            response = self.client.search_recent_tweets(
                 query=query,
                 tweet_fields=['created_at', 'public_metrics', 'text'],
-                max_results=100,
-                limit=max_results//100
-            ):
-                if tweet.data:
-                    for t in tweet.data:
-                        tweets.append({
-                            'id': t.id,
-                            'text': t.text,
-                            'created_at': t.created_at,
-                            'retweet_count': t.public_metrics['retweet_count'],
-                            'reply_count': t.public_metrics['reply_count'],
-                            'like_count': t.public_metrics['like_count'],
-                            'quote_count': t.public_metrics['quote_count']
-                        })
+                max_results=min(100, max_results)  # Twitter API max is 100 per request
+            )
+            
+            if response.data:
+                for t in response.data:
+                    tweets.append({
+                        'id': t.id,
+                        'text': t.text,
+                        'created_at': t.created_at,
+                        'retweet_count': t.public_metrics['retweet_count'],
+                        'reply_count': t.public_metrics['reply_count'],
+                        'like_count': t.public_metrics['like_count'],
+                        'quote_count': t.public_metrics['quote_count']
+                    })
+                    
+                    # Stop if we have enough tweets
+                    if len(tweets) >= max_results:
+                        break
                 
-                # Add a random delay between requests to avoid rate limits
-                time.sleep(random.uniform(1, 3))
+                print(f"Fetched {len(tweets)} tweets")
                 
-                # Print progress
-                print(f"Fetched {len(tweets)} tweets so far...")
-                
+                # Save tweets
+                if tweets:
+                    self.save_tweets(tweets)
+            
         except tweepy.errors.TooManyRequests:
-            print("Rate limit reached. Waiting for 15 minutes before retrying...")
-            time.sleep(900)  # Wait for 15 minutes
-            return self.fetch_tweets(query, max_results)  # Retry the request
+            print("Rate limit reached. Saving fetched tweets...")
+            if tweets:
+                self.save_tweets(tweets)
+            return tweets
             
         except Exception as e:
             print(f"An error occurred: {str(e)}")
+            if tweets:
+                self.save_tweets(tweets)
             return tweets
         
         return tweets
@@ -80,7 +87,9 @@ class TwitterAPI:
         """
         if not filename:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f'../data/tweets_{timestamp}.csv'
+            data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'data')
+            os.makedirs(data_dir, exist_ok=True)
+            filename = os.path.join(data_dir, f'tweets_{timestamp}.csv')
         
         df = pd.DataFrame(tweets)
         df.to_csv(filename, index=False)
@@ -94,7 +103,7 @@ def main():
     query = "Tesla"
     
     print(f"Fetching tweets for query: {query}")
-    tweets = api.fetch_tweets(query, max_results=1000)  # Reduced from 5000 to 1000
+    tweets = api.fetch_tweets(query, max_results=25)  # Fetch only 25 tweets
     
     if tweets:
         api.save_tweets(tweets)

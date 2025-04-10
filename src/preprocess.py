@@ -4,6 +4,7 @@ import nltk
 from nltk.tokenize import word_tokenize
 from nltk.corpus import stopwords
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
+import os
 
 # Download required NLTK resources
 nltk.download('punkt')
@@ -50,7 +51,8 @@ class TweetPreprocessor:
         Returns:
             list: List of tokens
         """
-        tokens = word_tokenize(text)
+        # Simple word tokenization using split()
+        tokens = text.split()
         return [token for token in tokens if token not in self.stop_words]
     
     def get_sentiment_label(self, text):
@@ -98,14 +100,15 @@ def main():
     preprocessor = TweetPreprocessor()
     
     # Load tweets
-    tweets_file = '../data/tweets_*.csv'  # Replace with your actual file
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    tweets_file = os.path.join(base_dir, 'data', 'tweets_20250409_160423.csv')
     df = pd.read_csv(tweets_file)
     
     # Preprocess tweets
     processed_df = preprocessor.preprocess_tweets(df)
     
     # Save processed data
-    output_file = '../data/processed_tweets.csv'
+    output_file = os.path.join(base_dir, 'data', 'processed_tweets.csv')
     processed_df.to_csv(output_file, index=False)
     print(f"Saved processed tweets to {output_file}")
 
